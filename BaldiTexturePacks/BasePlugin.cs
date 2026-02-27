@@ -653,7 +653,7 @@ namespace BaldiTexturePacks
             Resources.FindObjectsOfTypeAll<BalloonBusterBalloon>().Where(x => x.GetInstanceID() >= 0).Do(x => AddOverlaysToTransform(x.transform));
             Resources.FindObjectsOfTypeAll<MatchActivityBalloon>().Where(x => x.GetInstanceID() >= 0).Do(x => AddOverlaysToTransform(x.transform));
             Resources.FindObjectsOfTypeAll<PacketOMatic>().Where(x => x.GetInstanceID() >= 0).Do(x => AddOverlaysToTransform(x.transform));
-            postTexturePackLoadDelegate.Invoke();
+            postTexturePackLoadDelegate?.Invoke();
 
             yield return "Dumping all other data...";
             // handle all other dumps
