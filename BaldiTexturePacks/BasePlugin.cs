@@ -640,7 +640,7 @@ namespace BaldiTexturePacks
 
             yield return "Adding sprite overlays...";
 
-            NPCMetaStorage.Instance.All().Do(c =>
+            NPCMetaStorage.Instance.All().DoIf(c => c.flags.HasFlag(NPCFlags.HasSprite), c =>
             {
                 c.prefabs.Do(kvp => AddOverlaysToTransform(kvp.Value.transform));
             });
