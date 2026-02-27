@@ -525,6 +525,7 @@ namespace BaldiTexturePacks
                 {
                     var assetman = (AssetManager)fields.First(field => field.FieldType.Equals(typeof(AssetManager))).GetValue(plugin.Value.Instance);
                     allTextures = allTextures.AddRangeToArray(assetman.GetAll<Texture2D>().Where(tex => !allTextures.Contains(tex) && !ManualExclusions.Contains(tex.name)).ToArray());
+                    allTextures = allTextures.AddRangeToArray(assetman.GetAll<Sprite>().Where(spr => !allTextures.Contains(spr.texture) && !ManualExclusions.Contains(spr.texture.name)).Select(spr => spr.texture).ToArray());
                     validCubemapsForReplacement.AddRange(assetman.GetAll<Cubemap>().Where(tex => !validCubemapsForReplacement.Contains(tex) && !ManualExclusions.Contains(tex.name)));
                 }
             }
