@@ -507,8 +507,6 @@ namespace BaldiTexturePacks
             }
             grappleLine.SetPixels(0, 0, 256, 256, colors);
             grappleLine.Apply();
-            validTexturesForReplacement.Add(grappleLine);
-            validTexturesForReplacement.AddRange(allTextures);
             allTextures = allTextures.AddToArray(grappleLine);
 
             Cubemap[] allCubemaps = Resources.FindObjectsOfTypeAll<Cubemap>()
@@ -530,6 +528,7 @@ namespace BaldiTexturePacks
                 }
             }
             allTextures = RemoveDuplicates(allTextures);
+            validTexturesForReplacement.AddRange(allTextures);
             validCubemapsForReplacement = RemoveDuplicates(validCubemapsForReplacement.ToArray()).ToList();
 
             int coreTexturesHash = allTextures.Count(tex => tex.GetInstanceID() >= 0) + allCubemaps.Count(cubemap => cubemap.GetInstanceID() >= 0);
