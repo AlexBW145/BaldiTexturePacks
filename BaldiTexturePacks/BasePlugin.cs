@@ -345,6 +345,16 @@ namespace BaldiTexturePacks
             return result;
         }
 
+        private static T[] RemoveDuplicates<T>(T[] array)
+        {
+            var list = array.ToList();
+            for (int i = list.Count - 1; i >= 0; i--)
+            {
+                if (list.Count(x => x.Equals(list[i])) > 1)
+                    list.RemoveAt(i);
+            }
+            return list.ToArray();
+        }
 
         void Awake()
         {
@@ -518,6 +528,8 @@ namespace BaldiTexturePacks
                     validCubemapsForReplacement.AddRange(assetman.GetAll<Cubemap>().Where(tex => !validCubemapsForReplacement.Contains(tex) && !ManualExclusions.Contains(tex.name)));
                 }
             }
+            allTextures = RemoveDuplicates(allTextures);
+            validCubemapsForReplacement = RemoveDuplicates(validCubemapsForReplacement.ToArray()).ToList();
 
             int coreTexturesHash = allTextures.Count(tex => tex.GetInstanceID() >= 0) + allCubemaps.Count(cubemap => cubemap.GetInstanceID() >= 0);
             bool shouldRegenerateDump = true;
@@ -603,6 +615,8 @@ namespace BaldiTexturePacks
                     validClipsForReplacement.AddRange(assetman.GetAll<AudioClip>().Where(clip => !validClipsForReplacement.Contains(clip) && !ManualExclusions.Contains(clip.name)));
                 }
             }
+            validSoundObjectsForReplacement = RemoveDuplicates(validSoundObjectsForReplacement.ToArray()).ToList();
+            validClipsForReplacement = RemoveDuplicates(validClipsForReplacement.ToArray()).ToList();
             // handle annoying things like the outdoors ambience
             Resources.FindObjectsOfTypeAll<AudioSource>().Where(x => x.GetInstanceID() >= 0).Where(x => x.clip != null).Where(x => x.playOnAwake).Do(x =>
             {
@@ -626,7 +640,7 @@ namespace BaldiTexturePacks
 
             yield return "Adding sprite overlays...";
 
-            NPCMetaStorage.Instance.All().Where(x => x.info.Metadata.GUID == "mtm101.rulerp.bbplus.baldidevapi").Do(c =>
+            NPCMetaStorage.Instance.All().Do(c =>
             {
                 c.prefabs.Do(kvp => AddOverlaysToTransform(kvp.Value.transform));
             });
