@@ -18,6 +18,8 @@ using MTM101BaldAPI.SaveSystem;
 using UnityEngine.UI;
 using MidiPlayerTK;
 using BepInEx.Configuration;
+using BepInEx.Bootstrap;
+using System.Reflection;
 
 namespace BaldiTexturePacks
 {
@@ -39,26 +41,39 @@ namespace BaldiTexturePacks
 
         internal static ConfigEntry<bool> spriteSwapsEnabled;
 
-        public static string[] manualExclusions => new string[]
-        {
-            "LightMap",
-            "Large01",
-            "Large02",
-            "Medium01",
-            "Medium02",
-            "Medium03",
-            "Medium04",
-            "Medium05",
-            "Medium06",
-            "Thin01",
-            "Thin02",
-            "Font Texture",
-            "BasicallyGames_Logo_Color_2019"
-        };
+        public static readonly Action
+            // FOR assigning manual replacements towards game objects or adding in manual exclusions
+            preTexturePackLoadDelegate,
+            //
+            // FOR Adding overlays to transforms or inserting an asset that has not been detected by the automated asset man grabber.
+            postTexturePackLoadDelegate;
+            //
+
+        public static string[] ManualExclusions { get {
+                var array = new string[]
+                {
+                    "LightMap",
+                    "Large01",
+                    "Large02",
+                    "Medium01",
+                    "Medium02",
+                    "Medium03",
+                    "Medium04",
+                    "Medium05",
+                    "Medium06",
+                    "Thin01",
+                    "Thin02",
+                    "Font Texture",
+                    "BasicallyGames_Logo_Color_2019"
+                };
+                array = array.AddRangeToArray(modManualExclusions.ToArray()); // The C# version that the texture packs mod uses does not support a simplier way.
+                return array;
+            } }
+        public static readonly HashSet<string> modManualExclusions = new HashSet<string>();
 
         public static Dictionary<string, List<Component>> validManualReplacementTargets = new Dictionary<string, List<Component>>();
 
-        public static T[] AddManualReplacementTargetsFromResources<T>() where T : UnityEngine.Component
+        internal static T[] AddManualReplacementTargetsFromResources<T>() where T : UnityEngine.Component
         {
             T[] found = Resources.FindObjectsOfTypeAll<T>().Where(x => x.GetInstanceID() >= 0 && x.gameObject.scene.name == null).ToArray();
             if (found.Length < 1) return found;
@@ -95,6 +110,17 @@ namespace BaldiTexturePacks
             validManualReplacementTargets[c.GetType().Name].Add(c);
         }
 
+        public static T[] AddManualReplacementTargets<T>(params T[] components) where T : UnityEngine.Component
+        {
+            components.Do(x => x.MarkAsNeverUnload());
+            if (!validManualReplacementTargets.ContainsKey(typeof(T).Name))
+            {
+                validManualReplacementTargets[typeof(T).Name] = new List<Component>();
+            }
+            validManualReplacementTargets[typeof(T).Name].AddRange(components);
+            return components;
+        }
+
         static T[] GetAllIncludingDisabled<T>(Transform b) where T : UnityEngine.Component
         {
             List<T> t = new List<T>();
@@ -110,10 +136,7 @@ namespace BaldiTexturePacks
             return t.ToArray();
         }
 
-        public static void AddAllChildrenToMovables(Transform t)
-        {
-            validMovableComponents.AddRange(GetAllIncludingDisabled<RectTransform>(t));
-        }
+        public static void AddAllChildrenToMovables(Transform t) => validMovableComponents.AddRange(GetAllIncludingDisabled<RectTransform>(t));
 
         // a list of components (transform components) that are allowed to be moved
         public static List<Component> validMovableComponents = new List<Component>();
@@ -431,6 +454,7 @@ namespace BaldiTexturePacks
                 }
             });
             baseElevatorScreen = Resources.FindObjectsOfTypeAll<ElevatorScreen>().First(x => x.GetInstanceID() >= 0 && x.gameObject.scene.name == null);
+            preTexturePackLoadDelegate?.Invoke();
             yield return "Setting up file structures...";
             if (!Directory.Exists(packsPath))
             {
@@ -458,7 +482,7 @@ namespace BaldiTexturePacks
             Texture2D[] allTextures = Resources.FindObjectsOfTypeAll<Texture2D>()
                 .Where(x => x.GetInstanceID() >= 0)
                 .Where(x => (x.name != "") && (x.name != null))
-                .Where(x => !manualExclusions.Contains(x.name))
+                .Where(x => !ManualExclusions.Contains(x.name))
                 .Where(x => !x.name.StartsWith("LDR_LLL"))
                 .ToArray();
 
@@ -484,7 +508,18 @@ namespace BaldiTexturePacks
 
             validCubemapsForReplacement.AddRange(allCubemaps);
 
-            int coreTexturesHash = allTextures.Length + allCubemaps.Length;
+            foreach (var plugin in Chainloader.PluginInfos)
+            {
+                var fields = plugin.Value.Instance.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+                if (fields.ToList().Exists(field => field.FieldType.Equals(typeof(AssetManager))))
+                {
+                    var assetman = (AssetManager)fields.First(field => field.FieldType.Equals(typeof(AssetManager))).GetValue(plugin.Value.Instance);
+                    allTextures = allTextures.AddRangeToArray(assetman.GetAll<Texture2D>().Where(tex => !allTextures.Contains(tex) && !ManualExclusions.Contains(tex.name)).ToArray());
+                    validCubemapsForReplacement.AddRange(assetman.GetAll<Cubemap>().Where(tex => !validCubemapsForReplacement.Contains(tex) && !ManualExclusions.Contains(tex.name)));
+                }
+            }
+
+            int coreTexturesHash = allTextures.Count(tex => tex.GetInstanceID() >= 0) + allCubemaps.Count(cubemap => cubemap.GetInstanceID() >= 0);
             bool shouldRegenerateDump = true;
             string dumpCachePath = Path.Combine(corePackPath, "dumpCache.txt");
             if (File.Exists(dumpCachePath))
@@ -499,7 +534,7 @@ namespace BaldiTexturePacks
             for (int i = 0; i < allTextures.Length; i++)
             {
                 Texture2D readableCopy = allTextures[i].MakeReadableCopy(true);
-                if (shouldRegenerateDump)
+                if (shouldRegenerateDump && allTextures[i].GetInstanceID() >= 0)
                 {
                     try
                     {
@@ -558,6 +593,16 @@ namespace BaldiTexturePacks
 
             validSoundObjectsForReplacement = Resources.FindObjectsOfTypeAll<SoundObject>().Where(x => x.GetInstanceID() >= 0 && x.name != "Silence").ToList();
             validClipsForReplacement = Resources.FindObjectsOfTypeAll<AudioSource>().Where(x => x.GetInstanceID() >= 0).Where(x => x.clip != null).Select(x => x.clip).Distinct().ToList();
+            foreach (var plugin in Chainloader.PluginInfos)
+            {
+                var fields = plugin.Value.Instance.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+                if (fields.ToList().Exists(field => field.FieldType.Equals(typeof(AssetManager))))
+                {
+                    var assetman = (AssetManager)fields.First(field => field.FieldType.Equals(typeof(AssetManager))).GetValue(plugin.Value.Instance);
+                    validSoundObjectsForReplacement.AddRange(assetman.GetAll<SoundObject>().Where(clip => !validSoundObjectsForReplacement.Contains(clip) && !ManualExclusions.Contains(clip.name) && clip.name != "Silence"));
+                    validClipsForReplacement.AddRange(assetman.GetAll<AudioClip>().Where(clip => !validClipsForReplacement.Contains(clip) && !ManualExclusions.Contains(clip.name)));
+                }
+            }
             // handle annoying things like the outdoors ambience
             Resources.FindObjectsOfTypeAll<AudioSource>().Where(x => x.GetInstanceID() >= 0).Where(x => x.clip != null).Where(x => x.playOnAwake).Do(x =>
             {
@@ -608,6 +653,7 @@ namespace BaldiTexturePacks
             Resources.FindObjectsOfTypeAll<BalloonBusterBalloon>().Where(x => x.GetInstanceID() >= 0).Do(x => AddOverlaysToTransform(x.transform));
             Resources.FindObjectsOfTypeAll<MatchActivityBalloon>().Where(x => x.GetInstanceID() >= 0).Do(x => AddOverlaysToTransform(x.transform));
             Resources.FindObjectsOfTypeAll<PacketOMatic>().Where(x => x.GetInstanceID() >= 0).Do(x => AddOverlaysToTransform(x.transform));
+            postTexturePackLoadDelegate.Invoke();
 
             yield return "Dumping all other data...";
             // handle all other dumps
