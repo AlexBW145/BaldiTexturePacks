@@ -24,7 +24,7 @@ using System.Reflection;
 namespace BaldiTexturePacks
 {
     [BepInDependency("mtm101.rulerp.bbplus.baldidevapi")]
-    [BepInPlugin("mtm101.rulerp.baldiplus.texturepacks", "Texture Packs", "3.3.0.0")]
+    [BepInPlugin("mtm101.rulerp.baldiplus.texturepacks", "Texture Packs", "3.3.0.1")]
     public partial class TexturePacksPlugin : BaseUnityPlugin
     {
         public static List<(string, bool)> packOrder = new List<(string, bool)>();
